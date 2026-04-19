@@ -1,0 +1,13 @@
+{
+  "rules": {
+    "sightings": {
+      ".read": true,
+      ".write": true,
+      ".indexOn": ["date", "timestamp"]
+    },
+    "guides": {
+      ".read": true,
+      ".write": true
+    }
+  }
+}

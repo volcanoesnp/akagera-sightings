@@ -1,0 +1,170 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Akagera Safari — Guide Approvals</title>
+<link href="https://fonts.googleapis.com/css2?family=Roboto:wght@300;400;500;700&display=swap" rel="stylesheet">
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-database-compat.js"></script>
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{--bg:#f9f7f1;--white:#fff;--border:#e0dcd3;--orange:#f37712;--green:#61a95d;--navy:#122a43;--muted:#7a8a96;--red:#c0392b}
+body{font-family:'Roboto',sans-serif;background:var(--bg);color:var(--navy)}
+.wrap{max-width:700px;margin:0 auto;padding:2rem 1rem}
+.header{border-bottom:2px solid var(--navy);padding-bottom:1rem;margin-bottom:1.5rem}
+.header h1{font-size:1.2rem;font-weight:500}
+.header p{font-size:.75rem;color:var(--muted);margin-top:.25rem}
+.tabs{display:flex;gap:0;margin-bottom:1.5rem;border-bottom:1px solid var(--border)}
+.tab-btn{padding:.6rem 1.25rem;background:none;border:none;border-bottom:2px solid transparent;font-family:'Roboto',sans-serif;font-size:.8rem;color:var(--muted);cursor:pointer;margin-bottom:-1px}
+.tab-btn.active{color:var(--orange);border-bottom-color:var(--orange);font-weight:500}
+.guide-card{background:var(--white);border:1px solid var(--border);padding:1rem;display:flex;align-items:center;gap:1rem;margin-bottom:1px}
+.guide-avatar{width:48px;height:48px;border-radius:50%;object-fit:cover;flex-shrink:0;background:var(--border)}
+.guide-avatar-fallback{width:48px;height:48px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:.8rem;font-weight:700;color:#fff;flex-shrink:0}
+.guide-info{flex:1}
+.guide-name{font-size:.9rem;font-weight:500}
+.guide-meta{font-size:.7rem;color:var(--muted);margin-top:.2rem}
+.guide-actions{display:flex;gap:.5rem;flex-shrink:0}
+.approve-btn{padding:.4rem .85rem;background:var(--green);border:none;color:#fff;font-family:'Roboto',sans-serif;font-size:.75rem;cursor:pointer}
+.reject-btn{padding:.4rem .85rem;background:none;border:1px solid var(--red);color:var(--red);font-family:'Roboto',sans-serif;font-size:.75rem;cursor:pointer}
+.remove-btn{padding:.4rem .85rem;background:none;border:1px solid var(--border);color:var(--muted);font-family:'Roboto',sans-serif;font-size:.75rem;cursor:pointer}
+.badge{display:inline-block;padding:.15rem .5rem;font-size:.6rem;font-weight:500;text-transform:uppercase;letter-spacing:.05em;border-radius:2px}
+.badge-pending{background:rgba(243,119,18,.12);color:var(--orange)}
+.badge-approved{background:rgba(97,169,93,.12);color:var(--green)}
+.empty{text-align:center;padding:2rem;color:var(--muted);font-size:.85rem}
+.count-badge{background:var(--orange);color:#fff;font-size:.65rem;font-weight:700;padding:.1rem .45rem;border-radius:10px;margin-left:.4rem}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="header">
+    <h1>Guide Management</h1>
+    <p>Akagera Safari · Admin</p>
+  </div>
+
+  <div class="tabs">
+    <button class="tab-btn active" data-tab="pending" onclick="switchTab('pending')">
+      Pending <span class="count-badge" id="pendingCount">0</span>
+    </button>
+    <button class="tab-btn" data-tab="approved" onclick="switchTab('approved')">
+      Approved <span class="count-badge" id="approvedCount">0</span>
+    </button>
+  </div>
+
+  <div id="pendingList"></div>
+  <div id="approvedList" style="display:none"></div>
+</div>
+
+<script>
+var firebaseConfig = {
+  apiKey:            "AIzaSyBZIlMlztEDY64Hf-S3tFdI1Y45sTdkCR0",
+  authDomain:        "live-network-sightings.firebaseapp.com",
+  databaseURL:       "https://live-network-sightings-default-rtdb.firebaseio.com",
+  projectId:         "live-network-sightings",
+  storageBucket:     "live-network-sightings.firebasestorage.app",
+  messagingSenderId: "316989118142",
+  appId:             "1:316989118142:web:7722059d4866942865b0ef"
+};
+firebase.initializeApp(firebaseConfig);
+var db = firebase.database();
+
+var currentTab = 'pending';
+
+function switchTab(tab) {
+  currentTab = tab;
+  document.querySelectorAll('.tab-btn').forEach(function(b) { b.classList.remove('active'); });
+  document.querySelector('[data-tab="' + tab + '"]').classList.add('active');
+  document.getElementById('pendingList').style.display  = tab === 'pending'  ? 'block' : 'none';
+  document.getElementById('approvedList').style.display = tab === 'approved' ? 'block' : 'none';
+}
+
+function timeStr(ts) {
+  if (!ts) return '';
+  return new Date(ts).toLocaleDateString('en-GB', {day:'numeric',month:'short',year:'numeric'});
+}
+
+function avatarEl(guide) {
+  if (guide.photoURL) {
+    return '<img class="guide-avatar" src="' + guide.photoURL + '" alt="' + guide.name + '">';
+  }
+  return '<div class="guide-avatar-fallback" style="background:' + (guide.color||'#ccc') + '">' + (guide.initials||'?') + '</div>';
+}
+
+function renderGuide(id, guide, isPending) {
+  var card = document.createElement('div');
+  card.className = 'guide-card';
+  card.id = 'guide-' + id;
+
+  var actions = isPending
+    ? '<div class="guide-actions">'
+      + '<button class="approve-btn" onclick="approveGuide(\'' + id + '\')">Approve</button>'
+      + '<button class="reject-btn" onclick="removeGuide(\'' + id + '\')">Reject</button>'
+      + '</div>'
+    : '<div class="guide-actions">'
+      + '<button class="remove-btn" onclick="removeGuide(\'' + id + '\')">Remove</button>'
+      + '</div>';
+
+  var badge = isPending
+    ? '<span class="badge badge-pending">Pending</span>'
+    : '<span class="badge badge-approved">Active</span>';
+
+  card.innerHTML = avatarEl(guide)
+    + '<div class="guide-info">'
+    + '<div class="guide-name">' + guide.name + ' ' + badge + '</div>'
+    + '<div class="guide-meta">'
+    + (guide.phone ? guide.phone + ' · ' : '')
+    + 'Registered ' + timeStr(guide.registeredAt)
+    + (guide.totalSightings ? ' · ' + guide.totalSightings + ' sightings' : '')
+    + '</div>'
+    + '</div>'
+    + actions;
+
+  return card;
+}
+
+function approveGuide(id) {
+  db.ref('guides/' + id).update({ approved: true }).catch(function(err) {
+    alert('Error: ' + err.message);
+  });
+}
+
+function removeGuide(id) {
+  if (!confirm('Remove this guide?')) return;
+  db.ref('guides/' + id).remove().catch(function(err) {
+    alert('Error: ' + err.message);
+  });
+}
+
+db.ref('guides').on('value', function(snapshot) {
+  var data = snapshot.val() || {};
+  var pending = [], approved = [];
+
+  Object.entries(data).forEach(function(entry) {
+    if (entry[1].approved) approved.push(entry);
+    else pending.push(entry);
+  });
+
+  document.getElementById('pendingCount').textContent  = pending.length;
+  document.getElementById('approvedCount').textContent = approved.length;
+
+  var pendingList  = document.getElementById('pendingList');
+  var approvedList = document.getElementById('approvedList');
+  pendingList.innerHTML  = '';
+  approvedList.innerHTML = '';
+
+  if (pending.length === 0) {
+    pendingList.innerHTML = '<div class="empty">No pending registrations.</div>';
+  } else {
+    pending.forEach(function(e) { pendingList.appendChild(renderGuide(e[0], e[1], true)); });
+  }
+
+  if (approved.length === 0) {
+    approvedList.innerHTML = '<div class="empty">No approved guides yet.</div>';
+  } else {
+    approved.sort(function(a,b){ return (b[1].totalSightings||0)-(a[1].totalSightings||0); });
+    approved.forEach(function(e) { approvedList.appendChild(renderGuide(e[0], e[1], false)); });
+  }
+});
+</script>
+</body>
+</html>

@@ -1,0 +1,301 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<title>Akagera — Log Sighting</title>
+<link href="https://fonts.googleapis.com/css2?family=Roboto:wght@300;400;500;700&display=swap" rel="stylesheet">
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-database-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-storage-compat.js"></script>
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{--bg:#f9f7f1;--white:#fff;--border:#e0dcd3;--orange:#f37712;--green:#61a95d;--navy:#122a43;--muted:#7a8a96}
+html,body{font-family:'Roboto',sans-serif;background:var(--bg);color:var(--navy);min-height:100vh;-webkit-tap-highlight-color:transparent}
+.app{max-width:480px;margin:0 auto;padding:0 0 3rem}
+.header{background:var(--navy);padding:1.1rem 1.25rem;display:flex;align-items:center;gap:.75rem;position:sticky;top:0;z-index:10}
+.live-dot{width:10px;height:10px;background:var(--orange);border-radius:50%;animation:pulse 1.5s infinite}
+@keyframes pulse{0%,100%{opacity:1;transform:scale(1)}50%{opacity:.5;transform:scale(1.3)}}
+.header h1{color:#fff;font-size:.9rem;font-weight:500}
+.header p{color:rgba(255,255,255,.5);font-size:.7rem;margin-top:.1rem}
+.section{padding:1.25rem 1.25rem 0}
+.section-label{font-size:.62rem;font-weight:500;text-transform:uppercase;letter-spacing:.1em;color:var(--muted);margin-bottom:.75rem}
+.guide-list{display:flex;flex-direction:column;gap:1px}
+.guide-item{display:flex;align-items:center;gap:.75rem;background:var(--white);border:1.5px solid var(--border);padding:.65rem .75rem;cursor:pointer;transition:border-color .12s}
+.guide-item.selected{border-color:var(--orange);background:rgba(243,119,18,.05)}
+.guide-photo{width:38px;height:38px;border-radius:50%;object-fit:cover;flex-shrink:0}
+.guide-photo-fallback{width:38px;height:38px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:.7rem;font-weight:700;color:#fff;flex-shrink:0}
+.guide-name{font-size:.85rem;font-weight:400;color:var(--navy)}
+.guide-sightings{font-size:.65rem;color:var(--muted);margin-top:.1rem}
+.loading-guides{font-size:.8rem;color:var(--muted);padding:.75rem 0}
+.animal-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:.5rem}
+.animal-btn{background:var(--white);border:1.5px solid var(--border);padding:.6rem .3rem;display:flex;flex-direction:column;align-items:center;gap:.3rem;cursor:pointer;transition:all .12s}
+.animal-btn:active{transform:scale(.95)}
+.animal-btn.selected{border-color:var(--orange);background:rgba(243,119,18,.07)}
+.animal-emoji{font-size:1.5rem;line-height:1}
+.animal-label{font-size:.6rem;color:var(--muted)}
+.animal-btn.selected .animal-label{color:var(--orange);font-weight:500}
+.count-row{display:flex;align-items:center;background:var(--white);border:1px solid var(--border);overflow:hidden}
+.count-row label{padding:.75rem 1rem;font-size:.85rem;flex:1}
+.count-row input{width:70px;padding:.75rem;border:none;border-left:1px solid var(--border);font-family:'Roboto',sans-serif;font-size:.9rem;color:var(--navy);text-align:center;background:var(--bg);outline:none}
+.photo-label{display:flex;align-items:center;gap:.6rem;background:var(--white);border:1.5px dashed var(--border);padding:.9rem 1rem;cursor:pointer;font-size:.85rem;color:var(--muted)}
+#photoInput{display:none}
+.photo-preview-wrap{display:none;margin-top:.5rem}
+.photo-preview-wrap img{width:100%;max-height:200px;object-fit:cover;display:block}
+.gps-btn{width:100%;background:var(--white);border:1.5px solid var(--border);padding:.85rem 1rem;font-family:'Roboto',sans-serif;font-size:.85rem;color:var(--muted);display:flex;align-items:center;gap:.6rem;cursor:pointer;transition:all .12s}
+.gps-btn.gps-ok{border-color:var(--green);color:var(--green)}
+.note-input{width:100%;background:var(--white);border:1px solid var(--border);padding:.85rem 1rem;font-family:'Roboto',sans-serif;font-size:.85rem;color:var(--navy);resize:none;outline:none;min-height:80px}
+.note-input::placeholder{color:var(--muted)}
+.submit-btn{width:calc(100% - 2.5rem);margin:1.5rem 1.25rem 0;background:var(--orange);border:none;color:#fff;font-family:'Roboto',sans-serif;font-size:.95rem;font-weight:500;padding:1rem;cursor:pointer;display:block}
+.submit-btn:disabled{opacity:.6}
+.success-msg{display:none;flex-direction:column;align-items:center;justify-content:center;min-height:60vh;padding:2rem;text-align:center;gap:1rem}
+.success-icon{font-size:3rem}
+.success-msg h2{font-size:1.2rem;font-weight:500}
+.success-msg p{font-size:.8rem;color:var(--muted)}
+.new-btn{margin-top:.5rem;background:var(--navy);color:#fff;border:none;font-family:'Roboto',sans-serif;font-size:.85rem;padding:.75rem 1.75rem;cursor:pointer}
+</style>
+</head>
+<body>
+<div class="app">
+  <div class="header">
+    <div class="live-dot"></div>
+    <div><h1>Log a Sighting</h1><p>Akagera Safari · Live Network</p></div>
+  </div>
+  <div id="form">
+    <div class="section">
+      <div class="section-label">Select your name</div>
+      <div class="guide-list" id="guideList">
+        <div class="loading-guides">Loading guides…</div>
+      </div>
+    </div>
+    <div class="section">
+      <div class="section-label">What did you see?</div>
+      <div class="animal-grid" id="animalGrid"></div>
+    </div>
+    <div class="section">
+      <div class="section-label">How many?</div>
+      <div class="count-row">
+        <label>Number of animals</label>
+        <input type="number" id="countInput" value="1" min="1" max="999">
+      </div>
+    </div>
+    <div class="section">
+      <div class="section-label">Photo</div>
+      <label class="photo-label" for="photoInput">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg>
+        <span id="photoLabel">Take or upload a photo</span>
+      </label>
+      <input type="file" id="photoInput" accept="image/*" capture="environment">
+      <div class="photo-preview-wrap" id="photoPreviewWrap"><img id="photoPreview" alt="Preview"></div>
+    </div>
+    <div class="section">
+      <div class="section-label">Your location</div>
+      <button class="gps-btn" id="gpsBtn" type="button">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3"/></svg>
+        Share GPS location
+      </button>
+    </div>
+    <div class="section">
+      <div class="section-label">Note <span style="font-weight:300;text-transform:none;letter-spacing:0">(optional)</span></div>
+      <textarea class="note-input" id="noteInput" placeholder="e.g. Pride of 4 near Lake Mihindi, cubs present…"></textarea>
+    </div>
+    <button class="submit-btn" id="submitBtn" type="button">Submit Sighting</button>
+  </div>
+  <div class="success-msg" id="successMsg">
+    <div class="success-icon">✓</div>
+    <h2>Sighting logged</h2>
+    <p>Visible on the live feed now.</p>
+    <button class="new-btn" id="newSightingBtn">Log another</button>
+  </div>
+</div>
+
+<script>
+var ANIMALS = [
+  {id:"lion",label:"Lion",emoji:"🦁"},
+  {id:"leopard",label:"Leopard",emoji:"🐆"},
+  {id:"elephant",label:"Elephant",emoji:"🐘"},
+  {id:"rhino",label:"Rhino",emoji:"🦏"},
+  {id:"buffalo",label:"Buffalo",emoji:"🐃"},
+  {id:"giraffe",label:"Giraffe",emoji:"🦒"},
+  {id:"hippo",label:"Hippo",emoji:"🦛"},
+  {id:"crocodile",label:"Croc",emoji:"🐊"},
+  {id:"zebra",label:"Zebra",emoji:"🦓"},
+  {id:"shoebill",label:"Shoebill",emoji:"🐦"},
+  {id:"bird",label:"Bird",emoji:"🦅"},
+  {id:"other",label:"Other",emoji:"🐾"}
+];
+
+var firebaseConfig = {
+  apiKey:            "AIzaSyBZIlMlztEDY64Hf-S3tFdI1Y45sTdkCR0",
+  authDomain:        "live-network-sightings.firebaseapp.com",
+  databaseURL:       "https://live-network-sightings-default-rtdb.firebaseio.com",
+  projectId:         "live-network-sightings",
+  storageBucket:     "live-network-sightings.firebasestorage.app",
+  messagingSenderId: "316989118142",
+  appId:             "1:316989118142:web:7722059d4866942865b0ef"
+};
+firebase.initializeApp(firebaseConfig);
+var db = firebase.database();
+var storage = firebase.storage();
+
+var selectedAnimal = null;
+var selectedGuide  = null;
+var selectedGuideId = null;
+var photoFile = null;
+var gpsCoords = null;
+
+window.addEventListener('DOMContentLoaded', function() {
+
+  // Load approved guides
+  db.ref('guides').once('value', function(snapshot) {
+    var data = snapshot.val() || {};
+    var guideList = document.getElementById('guideList');
+    guideList.innerHTML = '';
+
+    var approved = Object.entries(data).filter(function(e){ return e[1].approved; });
+
+    if (approved.length === 0) {
+      guideList.innerHTML = '<div class="loading-guides">No approved guides yet.</div>';
+      return;
+    }
+
+    approved.sort(function(a,b){ return a[1].name.localeCompare(b[1].name); });
+
+    approved.forEach(function(entry) {
+      var id = entry[0], guide = entry[1];
+      var item = document.createElement('div');
+      item.className = 'guide-item';
+      item.dataset.id = id;
+
+      var photoEl = guide.photoURL
+        ? '<img class="guide-photo" src="' + guide.photoURL + '" alt="' + guide.name + '">'
+        : '<div class="guide-photo-fallback" style="background:' + (guide.color||'#ccc') + '">' + (guide.initials||'?') + '</div>';
+
+      item.innerHTML = photoEl
+        + '<div>'
+        + '<div class="guide-name">' + guide.name + '</div>'
+        + '<div class="guide-sightings">' + (guide.totalSightings || 0) + ' sightings</div>'
+        + '</div>';
+
+      item.addEventListener('click', function() {
+        document.querySelectorAll('.guide-item').forEach(function(i){ i.classList.remove('selected'); });
+        item.classList.add('selected');
+        selectedGuide   = guide;
+        selectedGuideId = id;
+      });
+
+      guideList.appendChild(item);
+    });
+  });
+
+  // Build animal grid
+  var grid = document.getElementById('animalGrid');
+  ANIMALS.forEach(function(a) {
+    var btn = document.createElement('button');
+    btn.className = 'animal-btn';
+    btn.innerHTML = '<span class="animal-emoji">'+a.emoji+'</span><span class="animal-label">'+a.label+'</span>';
+    btn.addEventListener('click', function() {
+      document.querySelectorAll('.animal-btn').forEach(function(b){ b.classList.remove('selected'); });
+      btn.classList.add('selected');
+      selectedAnimal = a;
+    });
+    grid.appendChild(btn);
+  });
+
+  // Photo
+  document.getElementById('photoInput').addEventListener('change', function(e) {
+    photoFile = e.target.files[0];
+    if (photoFile) {
+      var r = new FileReader();
+      r.onload = function(ev) {
+        document.getElementById('photoPreview').src = ev.target.result;
+        document.getElementById('photoPreviewWrap').style.display = 'block';
+        document.getElementById('photoLabel').textContent = 'Change photo';
+      };
+      r.readAsDataURL(photoFile);
+    }
+  });
+
+  // GPS
+  document.getElementById('gpsBtn').addEventListener('click', function() {
+    var btn = document.getElementById('gpsBtn');
+    btn.textContent = 'Getting location…';
+    btn.disabled = true;
+    navigator.geolocation.getCurrentPosition(
+      function(pos) {
+        gpsCoords = { lat: pos.coords.latitude, lng: pos.coords.longitude };
+        btn.textContent = '✓ ' + gpsCoords.lat.toFixed(4) + ', ' + gpsCoords.lng.toFixed(4);
+        btn.classList.add('gps-ok');
+        btn.disabled = false;
+      },
+      function(err) {
+        var msgs = {1:'Permission denied',2:'Position unavailable',3:'Timed out'};
+        btn.textContent = (msgs[err.code]||'Error') + ' — tap to retry';
+        btn.disabled = false;
+      },
+      {enableHighAccuracy:true,timeout:15000,maximumAge:0}
+    );
+  });
+
+  // Submit
+  document.getElementById('submitBtn').addEventListener('click', function() {
+    if (!selectedGuide)  { alert('Please select your name.'); return; }
+    if (!selectedAnimal) { alert('Please select an animal.'); return; }
+    if (!gpsCoords)      { alert('Please share your location.'); return; }
+
+    var btn = document.getElementById('submitBtn');
+    btn.textContent = 'Submitting…';
+    btn.disabled = true;
+
+    var note  = document.getElementById('noteInput').value.trim() || null;
+    var count = parseInt(document.getElementById('countInput').value) || 1;
+    var now   = new Date();
+    var dateStr = now.getFullYear() + '-' + String(now.getMonth()+1).padStart(2,'0') + '-' + String(now.getDate()).padStart(2,'0');
+
+    function saveData(photoURL) {
+      db.ref('sightings').push({
+        timestamp:   firebase.database.ServerValue.TIMESTAMP,
+        date:        dateStr,
+        animal:      selectedAnimal,
+        guideId:     selectedGuideId,
+        guide: {
+          name:     selectedGuide.name,
+          photoURL: selectedGuide.photoURL || null,
+          initials: selectedGuide.initials,
+          color:    selectedGuide.color
+        },
+        location:    gpsCoords,
+        note:        note,
+        count:       count,
+        photoURL:    photoURL || null
+      }).then(function() {
+        // Increment guide sighting count
+        db.ref('guides/' + selectedGuideId + '/totalSightings').transaction(function(current) {
+          return (current || 0) + 1;
+        });
+        document.getElementById('form').style.display = 'none';
+        document.getElementById('successMsg').style.display = 'flex';
+      }).catch(function(err) {
+        btn.textContent = 'FAILED: ' + err.code + ' — ' + err.message;
+        btn.disabled = false;
+        btn.style.background = '#c0392b';
+        btn.style.fontSize = '.7rem';
+      });
+    }
+
+    if (photoFile) {
+      var sr = storage.ref('sightings/' + Date.now() + '_' + photoFile.name);
+      sr.put(photoFile).then(function(){ return sr.getDownloadURL(); })
+        .then(function(url){ saveData(url); })
+        .catch(function(){ saveData(null); });
+    } else {
+      saveData(null);
+    }
+  });
+
+  document.getElementById('newSightingBtn').addEventListener('click', function(){ location.reload(); });
+});
+</script>
+</body>
+</html>

@@ -1,0 +1,143 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<title>Akagera Safari — Guide Registration</title>
+<link href="https://fonts.googleapis.com/css2?family=Roboto:wght@300;400;500;700&display=swap" rel="stylesheet">
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-database-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-storage-compat.js"></script>
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{--bg:#f9f7f1;--white:#fff;--border:#e0dcd3;--orange:#f37712;--green:#61a95d;--navy:#122a43;--muted:#7a8a96}
+html,body{font-family:'Roboto',sans-serif;background:var(--bg);color:var(--navy);min-height:100vh;-webkit-tap-highlight-color:transparent}
+.app{max-width:480px;margin:0 auto;padding:0 0 3rem}
+.header{background:var(--navy);padding:1.1rem 1.25rem;display:flex;align-items:center;gap:.75rem}
+.header h1{color:#fff;font-size:.9rem;font-weight:500}
+.header p{color:rgba(255,255,255,.5);font-size:.7rem;margin-top:.1rem}
+.section{padding:1.25rem 1.25rem 0}
+.section-label{font-size:.62rem;font-weight:500;text-transform:uppercase;letter-spacing:.1em;color:var(--muted);margin-bottom:.75rem}
+.photo-area{display:flex;flex-direction:column;align-items:center;gap:1rem;padding:1.5rem;background:var(--white);border:1px solid var(--border)}
+.avatar-preview{width:90px;height:90px;border-radius:50%;background:var(--border);display:flex;align-items:center;justify-content:center;overflow:hidden;font-size:1.8rem;font-weight:700;color:#fff;flex-shrink:0}
+.avatar-preview img{width:100%;height:100%;object-fit:cover}
+.photo-btn{padding:.5rem 1.25rem;border:1.5px solid var(--orange);background:none;color:var(--orange);font-family:'Roboto',sans-serif;font-size:.8rem;cursor:pointer}
+#photoInput{display:none}
+.text-input{width:100%;background:var(--white);border:1px solid var(--border);padding:.85rem 1rem;font-family:'Roboto',sans-serif;font-size:.95rem;color:var(--navy);outline:none}
+.text-input::placeholder{color:var(--muted)}
+.submit-btn{width:calc(100% - 2.5rem);margin:1.5rem 1.25rem 0;background:var(--orange);border:none;color:#fff;font-family:'Roboto',sans-serif;font-size:.95rem;font-weight:500;padding:1rem;cursor:pointer;display:block}
+.submit-btn:disabled{opacity:.6}
+.success-msg{display:none;flex-direction:column;align-items:center;justify-content:center;min-height:60vh;padding:2rem;text-align:center;gap:1rem}
+.success-icon{font-size:3rem}
+.success-msg h2{font-size:1.1rem;font-weight:500;color:var(--navy)}
+.success-msg p{font-size:.8rem;color:var(--muted);line-height:1.6}
+</style>
+</head>
+<body>
+<div class="app">
+  <div class="header">
+    <div>
+      <h1>Guide Registration</h1>
+      <p>Akagera Safari · Live Sightings Network</p>
+    </div>
+  </div>
+
+  <div id="form">
+    <div class="section">
+      <div class="section-label">Profile photo</div>
+      <div class="photo-area">
+        <div class="avatar-preview" id="avatarPreview">📷</div>
+        <label class="photo-btn" for="photoInput">Choose photo</label>
+        <input type="file" id="photoInput" accept="image/*" capture="user">
+      </div>
+    </div>
+
+    <div class="section">
+      <div class="section-label">Your full name</div>
+      <input type="text" class="text-input" id="nameInput" placeholder="e.g. Emmanuel Habimana">
+    </div>
+
+    <div class="section">
+      <div class="section-label">Your phone number</div>
+      <input type="tel" class="text-input" id="phoneInput" placeholder="+250 7xx xxx xxx">
+    </div>
+
+    <button class="submit-btn" id="submitBtn" type="button">Submit Registration</button>
+  </div>
+
+  <div class="success-msg" id="successMsg">
+    <div class="success-icon">✓</div>
+    <h2>Registration submitted</h2>
+    <p>Your registration is pending approval.<br>You will be notified when your account is active.</p>
+  </div>
+</div>
+
+<script>
+var firebaseConfig = {
+  apiKey:            "AIzaSyBZIlMlztEDY64Hf-S3tFdI1Y45sTdkCR0",
+  authDomain:        "live-network-sightings.firebaseapp.com",
+  databaseURL:       "https://live-network-sightings-default-rtdb.firebaseio.com",
+  projectId:         "live-network-sightings",
+  storageBucket:     "live-network-sightings.firebasestorage.app",
+  messagingSenderId: "316989118142",
+  appId:             "1:316989118142:web:7722059d4866942865b0ef"
+};
+firebase.initializeApp(firebaseConfig);
+var db = firebase.database();
+var storage = firebase.storage();
+
+var photoFile = null;
+
+document.getElementById('photoInput').addEventListener('change', function(e) {
+  photoFile = e.target.files[0];
+  if (photoFile) {
+    var reader = new FileReader();
+    reader.onload = function(ev) {
+      var preview = document.getElementById('avatarPreview');
+      preview.innerHTML = '<img src="' + ev.target.result + '" alt="Preview">';
+    };
+    reader.readAsDataURL(photoFile);
+  }
+});
+
+document.getElementById('submitBtn').addEventListener('click', function() {
+  var name  = document.getElementById('nameInput').value.trim();
+  var phone = document.getElementById('phoneInput').value.trim();
+  if (!name)  { alert('Please enter your name.'); return; }
+  if (!photoFile) { alert('Please add a profile photo.'); return; }
+
+  var btn = document.getElementById('submitBtn');
+  btn.textContent = 'Submitting…';
+  btn.disabled = true;
+
+  var initials = name.split(' ').map(function(w){ return w[0]; }).join('').substring(0,2).toUpperCase();
+  var colors = ['#f37712','#61a95d','#122a43','#e05c2a','#2a7aa1','#8b5e3c','#4a8c3f','#7b3fa0','#b8860b','#c0392b'];
+  var color = colors[Math.floor(Math.random() * colors.length)];
+
+  var storageRef = storage.ref('guides/' + Date.now() + '_' + photoFile.name);
+  storageRef.put(photoFile).then(function() {
+    return storageRef.getDownloadURL();
+  }).then(function(photoURL) {
+    return db.ref('guides').push({
+      name:         name,
+      phone:        phone || null,
+      photoURL:     photoURL,
+      initials:     initials,
+      color:        color,
+      approved:     false,
+      registeredAt: firebase.database.ServerValue.TIMESTAMP,
+      totalSightings: 0
+    });
+  }).then(function() {
+    document.getElementById('form').style.display = 'none';
+    document.getElementById('successMsg').style.display = 'flex';
+  }).catch(function(err) {
+    btn.textContent = 'FAILED: ' + err.message;
+    btn.disabled = false;
+    btn.style.background = '#c0392b';
+  });
+});
+</script>
+</body>
+</html>
