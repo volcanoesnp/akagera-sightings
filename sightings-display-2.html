@@ -1,0 +1,166 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Akagera National Park Wildlife Sightings</title>
+<link href="https://fonts.googleapis.com/css2?family=Roboto:wght@300;400;500;700&display=swap" rel="stylesheet">
+
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-database-compat.js"></script>
+
+<style>
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+:root { --bg:#f9f7f1; --white:#ffffff; --border:#e0dcd3; --orange:#f37712; --green:#61a95d; --navy:#122a43; --muted:#7a8a96; }
+body { font-family:'Roboto',sans-serif; background:var(--bg); color:var(--navy); }
+.wrap { max-width:640px; margin:0 auto; padding:1.5rem 1rem 3rem; }
+.live-header { display:flex; align-items:center; justify-content:space-between; margin-bottom:1.5rem; flex-wrap:wrap; gap:.75rem; }
+.live-title { display:flex; align-items:center; gap:.6rem; }
+.live-dot { width:8px; height:8px; background:var(--orange); border-radius:50%; animation:pulse 1.5s infinite; }
+@keyframes pulse { 0%,100%{opacity:1;transform:scale(1)}50%{opacity:.4;transform:scale(1.4)} }
+.live-title h2 { font-size:.95rem; font-weight:500; color:var(--navy); }
+.sighting-meta { font-size:.7rem; color:var(--muted); }
+.sighting-meta strong { color:var(--orange); }
+.feed { display:flex; flex-direction:column; gap:1px; }
+.card { background:var(--white); border:1px solid var(--border); overflow:hidden; animation:slideIn .25s ease; }
+@keyframes slideIn { from{opacity:0;transform:translateY(-6px)} to{opacity:1;transform:translateY(0)} }
+.card-photo { width:100%; height:200px; background-size:cover; background-position:center; background-color:var(--border); }
+.card-body { padding:1rem; }
+.card-top { display:flex; align-items:center; justify-content:space-between; margin-bottom:.5rem; }
+.animal-tag { display:flex; align-items:center; gap:.4rem; font-size:.9rem; font-weight:500; color:var(--navy); }
+.animal-emoji { font-size:1.1rem; }
+.count-badge { background:var(--orange); color:#fff; font-size:.6rem; font-weight:700; padding:.1rem .4rem; border-radius:2px; }
+.time-ago { font-size:.68rem; color:var(--muted); white-space:nowrap; }
+.card-note { font-size:.8rem; color:#4a5a68; line-height:1.5; margin-bottom:.75rem; font-weight:300; }
+.card-footer { display:flex; align-items:center; justify-content:space-between; padding-top:.75rem; border-top:1px solid var(--border); }
+.guide-info { display:flex; align-items:center; gap:.5rem; font-size:.75rem; color:var(--muted); }
+.guide-dot { width:26px; height:26px; border-radius:50%; display:flex; align-items:center; justify-content:center; font-size:.58rem; font-weight:700; color:#fff; }
+.map-link { display:flex; align-items:center; gap:.35rem; font-size:.72rem; font-weight:500; color:var(--orange); text-decoration:none; padding:.3rem .65rem; border:1px solid rgba(243,119,18,.3); }
+.empty { display:none; text-align:center; padding:3rem 1rem; color:var(--muted); font-size:.85rem; }
+.loading { text-align:center; padding:2rem; color:var(--muted); font-size:.8rem; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="live-header">
+    <div class="live-title">
+      <div class="live-dot"></div>
+      <h2>Akagera National Park Wildlife Sightings</h2>
+    </div>
+    <div class="sighting-meta"><strong id="sightingCount">—</strong> logged today</div>
+  </div>
+  <div class="loading" id="loading">Loading sightings…</div>
+  <div class="empty" id="empty">No sightings logged yet today.</div>
+  <div class="feed" id="feed"></div>
+</div>
+
+<script>
+var firebaseConfig = {
+  apiKey:            "AIzaSyBZIlMlztEDY64Hf-S3tFdI1Y45sTdkCR0",
+  authDomain:        "live-network-sightings.firebaseapp.com",
+  databaseURL:       "https://live-network-sightings-default-rtdb.firebaseio.com",
+  projectId:         "live-network-sightings",
+  storageBucket:     "live-network-sightings.firebasestorage.app",
+  messagingSenderId: "316989118142",
+  appId:             "1:316989118142:web:7722059d4866942865b0ef"
+};
+firebase.initializeApp(firebaseConfig);
+var db = firebase.database();
+
+function timeAgo(ts) {
+  var m = Math.floor((Date.now() - ts) / 60000);
+  if (m < 1)  return 'Just now';
+  if (m < 60) return m + 'm ago';
+  var h = Math.floor(m / 60);
+  if (h < 24) return h + 'h ago';
+  return Math.floor(h / 24) + 'd ago';
+}
+
+function renderCard(id, s) {
+  var card = document.createElement('div');
+  card.className = 'card';
+  card.id = 'card-' + id;
+
+  var ago     = s.timestamp ? timeAgo(s.timestamp) : 'Recently';
+  var mapLink = '';
+  if (s.location) {
+    mapLink = '<a class="map-link" href="https://www.google.com/maps?q=' + s.location.lat + ',' + s.location.lng + '" target="_blank" rel="noopener">'
+      + '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg>'
+      + 'View on map</a>';
+  }
+
+  var photoHtml = s.photoURL
+    ? '<div class="card-photo" style="background-image:url(\'' + s.photoURL + '\')"></div>'
+    : '';
+
+  var countBadge = (s.count && s.count > 1)
+    ? '<span class="count-badge">×' + s.count + '</span>'
+    : '';
+
+  var noteHtml = s.note
+    ? '<p class="card-note">' + s.note + '</p>'
+    : '';
+
+  var guideColor    = (s.guide && s.guide.color)    ? s.guide.color    : '#ccc';
+  var guideInitials = (s.guide && s.guide.initials) ? s.guide.initials : '?';
+  var guideName     = (s.guide && s.guide.name)     ? s.guide.name     : 'Guide';
+  var animalEmoji   = (s.animal && s.animal.emoji)  ? s.animal.emoji   : '🐾';
+  var animalLabel   = (s.animal && s.animal.label)  ? s.animal.label   : 'Wildlife';
+
+  card.innerHTML = photoHtml
+    + '<div class="card-body">'
+    + '<div class="card-top">'
+    + '<div class="animal-tag"><span class="animal-emoji">' + animalEmoji + '</span><span>' + animalLabel + '</span>' + countBadge + '</div>'
+    + '<span class="time-ago" data-ts="' + (s.timestamp || 0) + '">' + ago + '</span>'
+    + '</div>'
+    + noteHtml
+    + '<div class="card-footer">'
+    + '<div class="guide-info"><div class="guide-dot" style="background:' + guideColor + '">' + guideInitials + '</div><span>' + guideName + '</span></div>'
+    + mapLink
+    + '</div>'
+    + '</div>';
+
+  return card;
+}
+
+window.addEventListener('DOMContentLoaded', function() {
+  var feed    = document.getElementById('feed');
+  var empty   = document.getElementById('empty');
+  var loading = document.getElementById('loading');
+  var countEl = document.getElementById('sightingCount');
+
+  db.ref('sightings').limitToLast(30).on('value', function(snapshot) {
+    loading.style.display = 'none';
+    var data = snapshot.val();
+
+    if (!data) {
+      empty.style.display = 'block';
+      feed.innerHTML = '';
+      countEl.textContent = '0';
+      return;
+    }
+
+    empty.style.display = 'none';
+    var entries = Object.entries(data).sort(function(a, b) {
+      return (b[1].timestamp || 0) - (a[1].timestamp || 0);
+    });
+
+    feed.innerHTML = '';
+    entries.forEach(function(entry) {
+      feed.appendChild(renderCard(entry[0], entry[1]));
+    });
+    countEl.textContent = entries.length;
+
+    // Update times every minute
+    clearInterval(window._timeInterval);
+    window._timeInterval = setInterval(function() {
+      document.querySelectorAll('.time-ago').forEach(function(el) {
+        var ts = parseInt(el.dataset.ts);
+        if (ts) el.textContent = timeAgo(ts);
+      });
+    }, 60000);
+  });
+});
+</script>
+</body>
+</html>
