@@ -223,9 +223,13 @@ window.addEventListener('DOMContentLoaded', function() {
         btn.disabled = false;
       },
       function(err) {
-        btn.textContent = 'Location failed — tap to try again';
+        var msgs = {
+          1: 'Permission denied — please allow location in browser settings',
+          2: 'Position unavailable — check GPS is on',
+          3: 'Timed out — try again in open sky'
+        };
+        btn.textContent = msgs[err.code] || 'Error ' + err.code + ': ' + err.message;
         btn.disabled = false;
-        console.error('GPS error:', err.code, err.message);
       },
       { enableHighAccuracy: true, timeout: 15000, maximumAge: 0 }
     );
